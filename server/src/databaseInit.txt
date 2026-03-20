@@ -1,0 +1,31 @@
+CREATE TABLE IF NOT EXISTS users (
+    userId VARCHAR(200) NOT NULL,
+    publicKey TEXT,
+    nonce VARCHAR(255),
+    refreshToken VARCHAR(255),
+    PRIMARY KEY (userId)
+);
+
+CREATE TABLE IF NOT EXISTS groups (
+    groupId VARCHAR(200) NOT NULL,
+    groupPublicKey TEXT,
+    groupNonce VARCHAR(255),
+    encryptionKey TEXT,
+    PRIMARY KEY (groupId)
+);
+
+CREATE TABLE IF NOT EXISTS user_groups (
+    userId VARCHAR(200) NOT NULL,
+    groupId VARCHAR(200) NOT NULL,
+    PRIMARY KEY (userId, groupId),
+    FOREIGN KEY (userId) REFERENCES users(userId),
+    FOREIGN KEY (groupId) REFERENCES groups(groupId)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    messageId VARCHAR(200) NOT NULL,
+    encryptedMessage TEXT,
+    groupId VARCHAR(200) NOT NULL,
+    PRIMARY KEY(messageId),
+    FOREIGN KEY(groupId) REFERENCES groups(groupId)
+);
