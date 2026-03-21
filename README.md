@@ -1,54 +1,130 @@
-# CS4203_P2
-A Secure forum for CS4203 Practical
+# Secure Online Forum
 
-Set up:
-0. Need to be on the school network because the database is hosted on the school server. The connection will be refused if not. 
-1. Run "npm install" in both directories: CS4203_P2/frontend and CS4203_P2/server 
-2. Run "npm run dev" in the directory: CS4203_P2/server to start the server
-3. Run "npm run build" in the directory CS4203_P2/frontend and then run "npm run dev" in the same directory to start the frontend
-4. Choose the https://localhost:3001/ option to visit the website. 
+A full-stack web application implementing a secure, end-to-end encrypted group messaging forum. All cryptographic operations are performed client-side, ensuring the server never has access to plaintext messages.
 
-User Guide:
-1. There are sample credentials in the directory CS4203_P2/server for reference for what credentials that need to be stored
-2. Users need to store their own userIds and private keys, and they need to use both of them to log in, each log in creates a 2-hour refresh token. 
-3. To access the Groups page, users need to log in first to see the groups page unless they have a valid refresh token.
-4. Users can create groups, where with each successful creation user gets a log in private key and decryption key for messages. 
-5. Users need to input their userID, groupId(the group they want to join), and the log in key for the group to join the group
-6. Users need to input their decryption key to view the messages. Users can post without inputting the encryption key but they cannot view the messages. 
-7. Users need to refresh and input their decryption key to check the updated group chat. 
-8. To remove a user from the group, simply input the userId and groupId. Since the messages are anonymous, users could only know their own userId theoretically.
-9. User can click log out to redirect to the home page where 
+## Features
 
+- **RSA Digital Signature Authentication** — Users authenticate by signing a server-generated nonce with their private key, eliminating password-based login
+- **End-to-End Encrypted Messaging** — Messages are encrypted client-side using RSA-OAEP before transmission; the server only stores ciphertext
+- **Anonymous Group Chat** — Users within a group are identified only by opaque IDs, providing pseudonymous communication
+- **Client-Side Key Generation** — RSA key pairs for both signing and encryption are generated in the browser using the Web Crypto API
+- **JWT Session Management** — Access and refresh tokens with automatic rotation and secure HTTP-only cookies
+- **HTTPS Transport** — All communication is encrypted in transit via TLS
 
-MySQL settings:
+## Architecture
 
-    MySQL username = bl61
-    MySQL hostname = bl61.teaching.cs.st-andrews.ac.uk
+```
+┌──────────────────────┐         HTTPS         ┌──────────────────────┐
+│      Frontend        │◄─────────────────────►│       Backend        │
+│   React + Vite       │                        │   Express.js (Node)  │
+│                      │                        │                      │
+│  - Web Crypto API    │                        │  - JWT Auth          │
+│  - RSA key gen       │                        │  - Nonce generation  │
+│  - Message encrypt/  │                        │  - RSA signature     │
+│    decrypt           │                        │    verification      │
+│  - Nonce signing     │                        │  - MySQL database    │
+└──────────────────────┘                        └──────────────────────┘
+```
 
+**Frontend** (port 3001): React SPA built with Vite. Handles all cryptographic operations — key generation, nonce signing, message encryption/decryption — entirely in the browser.
 
-NB. The password may no longer be correct if you have changed it on
-    this server.
+**Backend** (port 3000): Express.js API server. Manages user registration, signature verification, group management, and encrypted message storage. Never processes plaintext message content.
 
-For command line access on your host server run:
+**Database**: MySQL with four tables — `users`, `groups`, `user_groups`, `messages`.
 
-  /usr/bin/mysql --defaults-extra-file=/var/cs/mysql/bl61/my.cnf -u bl61
+## Security Model
 
-or
+1. **Registration**: The client generates an RSA signing key pair (RSASSA-PKCS1-v1_5, 2048-bit). The public key is sent to the server; the private key stays with the user.
+2. **Login**: The server issues a random nonce. The client signs it with the user's private key. The server verifies the signature against the stored public key and issues JWT tokens.
+3. **Group Creation**: A separate RSA key pair is generated for group authentication, and an RSA-OAEP key pair is generated for message encryption. The encryption public key is stored server-side; private keys are given to the group creator.
+4. **Joining a Group**: Users must possess the group's signing private key to prove authorization (sign a server-generated nonce).
+5. **Messaging**: Messages are encrypted client-side with the group's RSA-OAEP public key before being sent to the server. Only users with the decryption private key can read them.
 
-  /usr/local/bin/mycli --defaults-file /var/cs/mysql/bl61/my.cnf -u bl61
+## Tech Stack
 
-NB. Aliases have been setup (on the host servers) so that if you enter
-'mysql' or 'mycli' sans path or arguments (on the host servers) then the
-above settings will automatically be used.
+| Layer      | Technology                          |
+|------------|-------------------------------------|
+| Frontend   | React 18, React Router, Vite        |
+| Backend    | Node.js, Express.js                 |
+| Database   | MySQL                               |
+| Auth       | JWT (access + refresh tokens)       |
+| Crypto     | Web Crypto API (client), Node.js crypto (server) |
+| Transport  | HTTPS with self-signed certificates |
 
-For command line access on another server or Linux lab client run:
+## Getting Started
 
-  /usr/bin/mysql -h bl61.teaching.cs.st-andrews.ac.uk -u bl61 -p
+### Prerequisites
 
-or
+- Node.js
+- MySQL server
+- SSL certificates (self-signed for development)
 
-  /usr/local/bin/mycli -h bl61.teaching.cs.st-andrews.ac.uk -u bl61
+### Setup
 
-If another user has given you rights on their database use their
-hostname with your username and password.
+1. **Install dependencies** in both the frontend and server directories:
 
+   ```bash
+   cd frontend && npm install
+   cd ../server && npm install
+   ```
+
+2. **Configure the database** — Create a `.env` file in `server/src/` with:
+
+   ```
+   HOST=<your-mysql-host>
+   USER=<your-mysql-user>
+   PASSWORD=<your-mysql-password>
+   DATABASE=<your-database-name>
+   PORT=3000
+   ACCESS_TOKEN_SECRET=<your-access-token-secret>
+   REFRESH_TOKEN_SECRET=<your-refresh-token-secret>
+   ```
+
+3. **Initialize the database** — Run the SQL statements in `server/src/databaseInit.txt` to create the required tables.
+
+4. **Generate SSL certificates** — Place `server-key.pem`, `server-cert.pem`, and `ca.pem` in `server/src/certs/`.
+
+5. **Start the server**:
+
+   ```bash
+   cd server && npm run dev
+   ```
+
+6. **Build and start the frontend**:
+
+   ```bash
+   cd frontend && npm run build && npm run dev
+   ```
+
+7. Open `https://localhost:3001` in your browser.
+
+## API Endpoints
+
+| Method | Endpoint                         | Description                        |
+|--------|----------------------------------|------------------------------------|
+| POST   | `/registerUser`                  | Register a new user with public key|
+| POST   | `/getUserNonce`                  | Request a login nonce              |
+| POST   | `/login`                         | Verify signed nonce, issue tokens  |
+| POST   | `/logout`                        | Invalidate refresh token           |
+| POST   | `/refreshToken`                  | Rotate access/refresh tokens       |
+| POST   | `/createGroup`                   | Create an encrypted group          |
+| POST   | `/generateGroupNonce`            | Request a group auth nonce         |
+| POST   | `/addUserToGroup`                | Join a group (requires signed nonce)|
+| POST   | `/removeGroupUser`               | Remove a user from a group         |
+| POST   | `/storeEncryptedMessage`         | Store an encrypted message         |
+| GET    | `/getEncryptedMessage/:groupId`  | Retrieve encrypted group messages  |
+| POST   | `/getGroupPublicKey`             | Get a group's signing public key   |
+| POST   | `/getGroupEncryptionKey`         | Get a group's encryption public key|
+
+## Database Schema
+
+```sql
+users (userId PK, publicKey, nonce, refreshToken)
+groups (groupId PK, groupPublicKey, groupNonce, encryptionKey)
+user_groups (userId FK, groupId FK) -- composite PK
+messages (messageId PK, encryptedMessage, groupId FK)
+```
+
+## License
+
+This project was developed as an academic exercise in applied cryptography and secure systems design.
